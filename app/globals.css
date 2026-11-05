@@ -1,0 +1,12 @@
+@import "tailwindcss";
+
+
+html.dark, html[data-theme="dark"] { color-scheme: dark; }
+html.dark, html[data-theme="dark"] body, html.dark, html[data-theme="dark"] .bg-\[\#f7f8fc\] { background: #0f172a !important; color: #e2e8f0; }
+html.dark, html[data-theme="dark"] .bg-white, html.dark, html[data-theme="dark"] .bg-slate-50 { background-color: #172033 !important; }
+html.dark, html[data-theme="dark"] .border-slate-200, html.dark, html[data-theme="dark"] .border-slate-300, html.dark, html[data-theme="dark"] .border-gray-400, html.dark, html[data-theme="dark"] .border-gray-300 { border-color: #334155 !important; }
+html.dark, html[data-theme="dark"] .text-slate-950, html.dark, html[data-theme="dark"] .text-slate-900, html.dark, html[data-theme="dark"] .text-slate-800, html.dark, html[data-theme="dark"] .text-gray-900, html.dark, html[data-theme="dark"] .text-gray-700 { color: #f1f5f9 !important; }
+html.dark, html[data-theme="dark"] .text-slate-700, html.dark, html[data-theme="dark"] .text-slate-600, html.dark, html[data-theme="dark"] .text-slate-500, html.dark, html[data-theme="dark"] .text-slate-400, html.dark, html[data-theme="dark"] .text-gray-500 { color: #cbd5e1 !important; }
+html.dark, html[data-theme="dark"] input, html.dark, html[data-theme="dark"] select, html.dark, html[data-theme="dark"] textarea { background-color: #0f172a !important; border-color: #475569 !important; color: #f8fafc !important; }
+html.dark, html[data-theme="dark"] .bg-indigo-50, html.dark, html[data-theme="dark"] .bg-emerald-50, html.dark, html[data-theme="dark"] .bg-amber-50, html.dark, html[data-theme="dark"] .bg-red-50 { background-color: #1e293b !important; }
+html.dark, html[data-theme="dark"] [id^="invoice-"] { background: #fff !important; color: #000 !important; }
