@@ -11,8 +11,8 @@ import { apiUrl } from "@/lib/api"
 
 type Site = { _id: string; siteName: string; siteCode?: string; location?: string }
 type Skill = { _id: string; skillName: string }
-type Contractor = { _id: string; name: string; email?: string; mobile?: string }
-type Company = { _id: string; companyName: string; companyCode?: string; ownerName?: string }
+type Contractor = { _id: string; name: string; email?: string; mobile?: string; logo?: string | null }
+type Company = { _id: string; companyName: string; companyCode?: string; ownerName?: string; logo?: string | null }
 
 type Labour = {
   _id: string
@@ -36,14 +36,19 @@ type Labour = {
   createdAt: string
 }
 type Api<T> = { success: boolean; data?: T; message?: string }
-type UserMe = { name: string; company?: { companyName: string } | null; role: string }
+type UserMe = {
+  name: string
+  logo?: string | null
+  company?: { companyName: string; logo?: string | null } | null
+  role: string
+}
 
 export default function LabourIdCardPage() {
   const { id } = useParams<{ id: string }>()
   const { showToast } = useToast()
   const [labour, setLabour] = useState<Labour | null>(null)
   const [contractorName, setContractorName] = useState<string>("Contractor Operations")
-  const [companyName, setCompanyName] = useState<string>("Labour Management System")
+  const [contractorLogo, setContractorLogo] = useState<string | null>(null)
   const [qrDataUrl, setQrDataUrl] = useState<string>("")
   const [loading, setLoading] = useState(true)
   const cardRef = useRef<HTMLDivElement>(null)
@@ -53,14 +58,21 @@ export default function LabourIdCardPage() {
 
     Promise.all([
       fetch(apiUrl(`/labours/get-labour/${id}`), { credentials: "include", signal: controller.signal }),
+      fetch(apiUrl("/company/profile"), { credentials: "include", signal: controller.signal }).catch(() => null),
       fetch(apiUrl("/auth/me"), { credentials: "include", signal: controller.signal }).catch(() => null),
     ])
-      .then(async ([labourRes, meRes]) => {
+      .then(async ([labourRes, companyRes, meRes]) => {
         const result = (await labourRes.json()) as Api<Labour>
         if (!labourRes.ok || !result.success || !result.data) {
           throw new Error(result.message || "Failed to load labour.")
         }
         setLabour(result.data)
+
+        let companyLogo: string | null = null
+        if (companyRes && companyRes.ok) {
+          const compData = await companyRes.json()
+          if (compData?.company?.logo) companyLogo = compData.company.logo
+        }
 
         let currentUser: UserMe | null = null
         if (meRes && meRes.ok) {
@@ -68,18 +80,22 @@ export default function LabourIdCardPage() {
           if (meData?.user) currentUser = meData.user
         }
 
-        // Determine Contractor & Company name dynamically
+        // Determine Contractor Name & Logo dynamically
         const resolvedContractor =
           result.data.contractorId?.name ||
           (currentUser?.role === "CONTRACTOR" ? currentUser.name : currentUser?.name) ||
           "Authorized Contractor"
-        const resolvedCompany =
-          result.data.companyId?.companyName ||
-          currentUser?.company?.companyName ||
-          "Labour Management System"
+
+        const resolvedLogo =
+          companyLogo ||
+          result.data.companyId?.logo ||
+          result.data.contractorId?.logo ||
+          currentUser?.company?.logo ||
+          currentUser?.logo ||
+          null
 
         setContractorName(resolvedContractor)
-        setCompanyName(resolvedCompany)
+        setContractorLogo(resolvedLogo)
 
         // QR Code Payload
         const qrPayload = JSON.stringify({
@@ -122,14 +138,15 @@ export default function LabourIdCardPage() {
     a.click()
   }
 
-  // Generate clean Contractor Logo Initials
-  const contractorInitials = contractorName
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((w) => w[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase() || "CT"
+  // Fallback Contractor Logo Initials
+  const contractorInitials =
+    contractorName
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((w) => w[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase() || "CT"
 
   return (
     <div className="flex min-h-screen bg-[#f7f8fc]">
@@ -149,7 +166,7 @@ export default function LabourIdCardPage() {
               </p>
               <h1 className="mt-2 text-2xl font-bold text-slate-900">Worker Identity Card (Landscape)</h1>
               <p className="mt-1 text-sm text-slate-500">
-                Authorized badge featuring Contractor Branding, Logo &amp; Attendance QR Code.
+                Authorized badge featuring Contractor Logo &amp; Attendance QR Code.
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -159,11 +176,17 @@ export default function LabourIdCardPage() {
               >
                 Back to Labours
               </Link>
+              <Link
+                href="/pages/profile"
+                className="flex h-10 items-center rounded-md border border-indigo-200 bg-indigo-50 px-4 text-sm font-semibold text-indigo-700 hover:bg-indigo-100"
+              >
+                Upload Contractor Logo
+              </Link>
               <button
                 type="button"
                 onClick={handleDownloadQR}
                 disabled={!qrDataUrl}
-                className="flex h-10 items-center gap-2 rounded-md border border-indigo-300 bg-indigo-50 px-4 text-sm font-semibold text-indigo-700 hover:bg-indigo-100 disabled:opacity-50"
+                className="flex h-10 items-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
               >
                 Download QR Code
               </button>
@@ -197,11 +220,20 @@ export default function LabourIdCardPage() {
                 <div className="relative bg-gradient-to-r from-slate-950 via-indigo-950 to-slate-900 px-5 py-3 text-white">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      {/* Contractor Brand Logo Shield / Icon */}
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-amber-400 via-indigo-500 to-indigo-600 p-0.5 shadow-md">
-                        <div className="flex h-full w-full items-center justify-center rounded-[10px] bg-slate-950 font-black text-xs text-amber-300">
-                          {contractorInitials}
-                        </div>
+                      {/* Contractor Brand Logo */}
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white p-1 shadow-md ring-2 ring-indigo-400/40">
+                        {contractorLogo ? (
+                          /* eslint-disable-next-line @next/next/no-img-element */
+                          <img
+                            src={contractorLogo}
+                            alt={`${contractorName} Logo`}
+                            className="h-full w-full object-contain"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center rounded-lg bg-slate-900 font-black text-xs text-amber-300">
+                            {contractorInitials}
+                          </div>
+                        )}
                       </div>
 
                       <div className="min-w-0">
@@ -336,7 +368,9 @@ export default function LabourIdCardPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-bold text-slate-900">Landscape Badge Ready for Print &amp; Lamination</h4>
-                    <p className="mt-0.5 text-slate-500">Authorized with contractor logo and identity credentials.</p>
+                    <p className="mt-0.5 text-slate-500">
+                      Want to update your logo? Go to <Link href="/pages/profile" className="font-bold text-indigo-600 underline">Company Profile</Link> to upload.
+                    </p>
                   </div>
                   <Link
                     href="/pages/contractorpages/attendance/scan"

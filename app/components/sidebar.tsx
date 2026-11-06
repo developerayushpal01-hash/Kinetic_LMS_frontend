@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { apiUrl } from "@/lib/api"
 
 type MenuItem = {
   id: string
@@ -114,6 +115,19 @@ const menuItems: MenuItem[] = [
     ),
   },
   {
+    id: "supervisors",
+    label: "Supervisors / Users",
+    href: "/pages/contractorpages/users",
+    icon: ({ className }) => (
+      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+        <circle cx="9" cy="7" r="4" />
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+      </svg>
+    ),
+  },
+  {
     id: "sites",
     label: "Sites",
     href: "/pages/contractorpages/sites",
@@ -190,12 +204,26 @@ const menuItems: MenuItem[] = [
 const Sidebar: React.FC = () => {
   const pathname = usePathname()
   const [collapsed, setCollapsed] = useState(false)
+  const [userRole, setUserRole] = useState<string>("CONTRACTOR")
 
   useEffect(() => {
     const saved = localStorage.getItem("sidebar-collapsed")
     if (saved !== null) {
       setCollapsed(saved === "true")
     }
+
+    const checkRole = async () => {
+      try {
+        const res = await fetch(apiUrl("/auth/me"), { credentials: "include" })
+        const json = await res.json()
+        if (json?.user?.role) {
+          setUserRole(json.user.role)
+        }
+      } catch {
+        // fallback
+      }
+    }
+    checkRole()
   }, [])
 
   const toggleCollapse = () => {
@@ -209,6 +237,19 @@ const Sidebar: React.FC = () => {
       return pathname === "/" || pathname === "/pages/contractorpages/dashboard"
     }
     return pathname.startsWith(item.href)
+  }
+
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (userRole === "SUPERVISOR") {
+      // Supervisor can only see Attendance, QR Scan, and Employees
+      return ["attendance", "qr-scan-attendance", "leave", "employees"].includes(item.id)
+    }
+    return true
+  })
+
+  if (userRole === "SUPERVISOR") {
+    // Supervisor has a bottom bar instead of sidebar
+    return null
   }
 
   return (
@@ -236,7 +277,7 @@ const Sidebar: React.FC = () => {
 
       {/* Navigation Menu */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1 scrollbar-thin scrollbar-thumb-slate-700">
-        {menuItems.map((item) => {
+        {filteredMenuItems.map((item) => {
           const active = isItemActive(item)
           const Icon = item.icon
 

@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { ToastProvider } from "./components/toast-provider";
 import { PushNotificationManager } from "./components/push-notification-manager";
+import SupervisorBottomBar from "./components/supervisor-bottom-bar";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -30,7 +31,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
       suppressHydrationWarning
     >
-      <body className="min-h-full flex flex-col"><script dangerouslySetInnerHTML={{ __html: "try { const dark = localStorage.getItem(\u0027kinetic-theme\u0027) === \u0027dark\u0027; document.documentElement.classList.toggle(\u0027dark\u0027, dark); document.documentElement.dataset.theme = dark ? \u0027dark\u0027 : \u0027light\u0027 } catch {}" }} /><ToastProvider><PushNotificationManager />{children}</ToastProvider></body>
+      <body className="min-h-full flex flex-col" suppressHydrationWarning><script dangerouslySetInnerHTML={{ __html: "try { const dark = localStorage.getItem(\u0027kinetic-theme\u0027) === \u0027dark\u0027; document.documentElement.classList.toggle(\u0027dark\u0027, dark); document.documentElement.dataset.theme = dark ? \u0027dark\u0027 : \u0027light\u0027 } catch {}" }} /><ToastProvider><PushNotificationManager />{children}<SupervisorBottomBar /></ToastProvider></body>
     </html>
   );
 }

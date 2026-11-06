@@ -9,6 +9,9 @@ import { useToast } from "@/app/components/toast-provider"
 type LoginResponse = {
   success: boolean
   message?: string
+  user?: {
+    role: string
+  }
 }
 
 const LoginPage = () => {
@@ -40,8 +43,14 @@ const LoginPage = () => {
       }
 
       showToast(result.message ?? "Login successful.", "success")
-      router.push("/")
-      router.refresh()
+      
+      const targetUrl =
+        result.user?.role === "SUPERVISOR"
+          ? "/pages/contractorpages/attendance"
+          : "/"
+
+      // Hard redirect to ensure auth cookie is freshly committed across origins on mobile browsers
+      window.location.href = targetUrl
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Login failed. Please try again."
       setError(message)

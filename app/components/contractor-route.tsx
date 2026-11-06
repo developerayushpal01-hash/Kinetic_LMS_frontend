@@ -36,6 +36,23 @@ const ContractorRoute = ({ children }: ContractorRouteProps) => {
           return
         }
 
+        if (result.user.role === "SUPERVISOR") {
+          // Allowed supervisor routes
+          const supervisorAllowed = [
+            "/pages/contractorpages/labours",
+            "/pages/contractorpages/attendance",
+          ]
+          const isAllowed = supervisorAllowed.some((prefix) => pathname.startsWith(prefix))
+
+          if (!isAllowed) {
+            router.replace("/pages/contractorpages/attendance")
+            return
+          }
+
+          setIsAuthorized(true)
+          return
+        }
+
         if (result.user.role !== "CONTRACTOR") {
           router.replace("/pages/unauthorized")
           return

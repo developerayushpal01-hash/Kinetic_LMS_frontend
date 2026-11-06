@@ -82,7 +82,7 @@ const Navbar = () => {
   useEffect(() => {
     const controller = new AbortController()
 
-    const loadCurrentUser = async () => {
+    const loadUser = async () => {
       try {
         const response = await fetch(apiUrl("/auth/me"), {
           credentials: "include",
@@ -90,24 +90,23 @@ const Navbar = () => {
         })
         const result = (await response.json()) as MeResponse
 
-        if (response.status === 401) {
-          router.replace("/pages/login")
+        if (!response.ok || !result.success || !result.user) {
           return
         }
 
-        if (!response.ok || !result.success || !result.user) {
-          throw new Error(result.message ?? "Profile load failed.")
-        }
-
         setUser(result.user)
-      } catch (requestError) {
-        if (requestError instanceof Error && requestError.name !== "AbortError") {
-          setUser(null)
-        }
+      } catch {
+        // Silently keep default UI
       }
     }
 
-    loadCurrentUser()
+    loadUser()
+
+    return () => controller.abort()
+  }, [])
+
+  useEffect(() => {
+    const controller = new AbortController()
 
     const loadSites = async () => {
       try {
@@ -116,22 +115,23 @@ const Navbar = () => {
           signal: controller.signal,
         })
         const result = await response.json()
-        if (response.ok && result?.success && Array.isArray(result?.data)) {
+
+        if (response.ok && result.success && Array.isArray(result.data)) {
           setSites(result.data)
         }
-      } catch (err) {
-        // Silently fail if site fetch aborts or fails
+      } catch {
+        // Silently fail if not logged in
       }
     }
 
     loadSites()
 
     return () => controller.abort()
-  }, [router])
+  }, [])
 
   const handleLogout = async () => {
-    setLogoutError("")
     setIsLoggingOut(true)
+    setLogoutError("")
 
     try {
       const response = await fetch(apiUrl("/auth/logout"), {
@@ -139,34 +139,41 @@ const Navbar = () => {
         credentials: "include",
       })
 
-      if (!response.ok) {
-        const result = (await response.json()) as { message?: string }
-        throw new Error(result.message ?? "Logout failed. Please try again.")
+      const result = await response.json().catch(() => ({}))
+
+      if (!response.ok || result.success === false) {
+        throw new Error(result.message ?? "Logout failed.")
       }
 
-      showToast("Logout successful.", "success")
-      router.replace("/pages/login")
+      showToast("Logged out successfully.", "success")
+      setIsProfileMenuOpen(false)
+      router.push("/pages/login")
       router.refresh()
     } catch (requestError) {
       const message = requestError instanceof Error ? requestError.message : "Logout failed."
       setLogoutError(message)
       showToast(message, "error")
+    } finally {
       setIsLoggingOut(false)
     }
   }
 
-  // Determine current page title
   const getPageTitle = () => {
-    if (pathname === "/" || pathname.includes("dashboard")) return "Dashboard"
-    if (pathname.includes("labour")) return "Employees / Labours"
-    if (pathname.includes("payroll")) return "Payroll"
-    if (pathname.includes("attendance")) return "Attendance"
-    if (pathname.includes("invoice")) return "Claims & Invoices"
-    if (pathname.includes("report")) return "Reports"
-    if (pathname.includes("setting")) return "Settings"
-    if (pathname.includes("profile")) return "Company Profile"
-    if (pathname.includes("site")) return "Sites"
-    if (pathname.includes("wage-categories")) return "Wage Categories"
+    if (pathname.includes("/labours")) return "Employees"
+    if (pathname.includes("/wage-categories")) return "Wage Categories"
+    if (pathname.includes("/payroll/settings")) return "Pay Components"
+    if (pathname.includes("/payroll/payments")) return "Reimbursements"
+    if (pathname.includes("/payroll")) return "Payroll"
+    if (pathname.includes("/attendance/mark")) return "Leave Management"
+    if (pathname.includes("/attendance/scan")) return "QR Attendance"
+    if (pathname.includes("/attendance")) return "Attendance"
+    if (pathname.includes("/sites")) return "Sites"
+    if (pathname.includes("/invoices")) return "Claims & Invoices"
+    if (pathname.includes("/reports")) return "Compliance & Reports"
+    if (pathname.includes("/profile")) return "Profile"
+    if (pathname.includes("/settings")) return "Settings"
+    if (pathname.includes("/users")) return "User Management"
+    if (pathname.includes("/notifications")) return "Notifications"
     return "Dashboard"
   }
 
@@ -190,6 +197,104 @@ const Navbar = () => {
     .map((word) => word.charAt(0).toUpperCase())
     .join("") || "K"
 
+  const isSupervisor = user?.role === "SUPERVISOR"
+
+  // 1. MOBILE APP STYLE HEADER FOR SUPERVISOR
+  if (isSupervisor) {
+    return (
+      <header className="sticky top-0 z-40 flex h-16 w-full shrink-0 items-center justify-between border-b border-slate-200/90 bg-white px-4 sm:px-6 shadow-xs">
+        {/* Left: Kinetic LMS Logo */}
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#07162b] text-white shadow-xs">
+            <span className="text-base font-extrabold text-emerald-400">K</span>
+          </div>
+          <div>
+            <span className="text-sm font-extrabold tracking-wider text-[#07162b] uppercase">
+              Kinetic <span className="text-emerald-600">LMS</span>
+            </span>
+            <span className="block text-[9px] font-bold text-emerald-600 uppercase tracking-widest -mt-0.5">
+              Supervisor
+            </span>
+          </div>
+        </div>
+
+        {/* Right: Notifications Button + Profile Avatar */}
+        <div className="flex items-center gap-2.5">
+          {/* Notification Button */}
+          <Link
+            href="/pages/notifications"
+            aria-label="Notifications"
+            className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 transition-colors"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+              <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+            </svg>
+            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
+              3
+            </span>
+          </Link>
+
+          {/* Profile Avatar without dropdown arrow */}
+          <div ref={profileMenuRef} className="relative">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={isProfileMenuOpen}
+              onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              className="flex items-center rounded-full p-0.5 hover:ring-2 hover:ring-emerald-500/30 transition-all"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-emerald-600 font-bold text-white text-xs shadow-xs">
+                {initials}
+              </div>
+            </button>
+
+            {isProfileMenuOpen && (
+              <div
+                role="menu"
+                className="absolute right-0 top-full mt-2 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1.5 shadow-xl z-50"
+              >
+                <div className="border-b border-slate-100 px-4 py-2">
+                  <p className="truncate text-sm font-semibold text-slate-900">{displayName}</p>
+                  <p className="text-xs text-emerald-600 font-medium">Supervisor</p>
+                </div>
+
+                <Link
+                  href="/pages/notifications"
+                  role="menuitem"
+                  onClick={() => setIsProfileMenuOpen(false)}
+                  className="flex items-center gap-2.5 px-4 py-2 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+                    <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+                  </svg>
+                  Notifications
+                </Link>
+
+                <div className="my-1 border-t border-slate-100" />
+
+                <button
+                  type="button"
+                  role="menuitem"
+                  disabled={isLoggingOut}
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-2.5 px-4 py-2 text-left text-xs font-medium text-red-600 hover:bg-red-50 transition-colors disabled:opacity-50"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10" />
+                  </svg>
+                  {isLoggingOut ? "Logging out..." : "Logout"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      </header>
+    )
+  }
+
+  // 2. STANDARD DESKTOP HEADER FOR CONTRACTOR / ADMIN
   return (
     <header className="sticky top-0 z-20 flex h-16 w-full shrink-0 items-center justify-between border-b border-slate-200/80 bg-white px-6 shadow-xs">
       {/* Left: Hamburger + Page Title */}
@@ -208,7 +313,7 @@ const Navbar = () => {
         <h1 className="text-xl font-bold tracking-tight text-slate-900">{getPageTitle()}</h1>
       </div>
 
-      {/* Right Controls matching the image */}
+      {/* Right Controls */}
       <div className="flex items-center gap-3">
         {/* Site Selector Dropdown */}
         <div ref={siteMenuRef} className="relative">
@@ -324,8 +429,8 @@ const Navbar = () => {
         </div>
 
         {/* Notifications Icon with count 3 */}
-        <button
-          type="button"
+        <Link
+          href="/pages/notifications"
           aria-label="Notifications"
           className="relative rounded-lg p-2 text-slate-600 hover:bg-slate-100 transition-colors"
         >
@@ -336,7 +441,7 @@ const Navbar = () => {
           <span className="absolute 1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
             3
           </span>
-        </button>
+        </Link>
 
         {/* Settings Icon */}
         <Link
