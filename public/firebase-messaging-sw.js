@@ -15,17 +15,34 @@ firebase.initializeApp(firebaseConfig);
 
 const messaging = firebase.messaging();
 
-// Handle background notifications
+// Handle background push notifications
 messaging.onBackgroundMessage((payload) => {
-  console.log("[firebase-messaging-sw.js] Received background message ", payload);
-  
-  const notificationTitle = payload.notification ? payload.notification.title : "Kinetic LMS Notification";
-  const notificationOptions = {
-    body: payload.notification ? payload.notification.body : "You have a new update.",
+  console.log("[firebase-messaging-sw.js] Received background message", payload);
+
+  const title = payload.notification?.title || payload.data?.title || "Kinetic LMS";
+  const options = {
+    body: payload.notification?.body || payload.data?.body || "New update received",
     icon: "/assets/notification.png",
-    data: payload.data,
+    badge: "/assets/notification.png",
+    data: payload.data || {},
   };
 
-  self.registration.showNotification(notificationTitle, notificationOptions);
+  self.registration.showNotification(title, options);
 });
 
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const urlToOpen = event.notification.data?.url || "/pages/contractorpages/attendance";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((windowClients) => {
+      for (let client of windowClients) {
+        if (client.url.includes(self.location.origin) && "focus" in client) {
+          return client.focus();
+        }
+      }
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
+    })
+  );
+});

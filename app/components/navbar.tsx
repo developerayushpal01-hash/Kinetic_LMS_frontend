@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { useEffect, useRef, useState } from "react"
 import { usePathname, useRouter } from "next/navigation"
-import { apiUrl } from "@/lib/api"
+import { apiUrl, getAuthHeaders } from "@/lib/api"
 import { useToast } from "@/app/components/toast-provider"
 
 type AuthenticatedUser = {
@@ -80,12 +80,21 @@ const Navbar = () => {
   }, [])
 
   useEffect(() => {
+    // 1. Check local cache first for instant render
+    const cachedUser = localStorage.getItem("userInfo")
+    if (cachedUser) {
+      try {
+        setUser(JSON.parse(cachedUser))
+      } catch {}
+    }
+
     const controller = new AbortController()
 
     const loadUser = async () => {
       try {
         const response = await fetch(apiUrl("/auth/me"), {
           credentials: "include",
+          headers: getAuthHeaders(),
           signal: controller.signal,
         })
         const result = (await response.json()) as MeResponse
@@ -95,6 +104,8 @@ const Navbar = () => {
         }
 
         setUser(result.user)
+        localStorage.setItem("userInfo", JSON.stringify(result.user))
+        localStorage.setItem("userRole", result.user.role)
       } catch {
         // Silently keep default UI
       }

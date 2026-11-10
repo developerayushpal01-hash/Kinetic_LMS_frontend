@@ -9,6 +9,7 @@ import { useToast } from "@/app/components/toast-provider"
 type LoginResponse = {
   success: boolean
   message?: string
+  token?: string
   user?: {
     role: string
   }
@@ -40,6 +41,14 @@ const LoginPage = () => {
 
       if (!response.ok || !result.success) {
         throw new Error(result.message ?? "Login failed. Please try again.")
+      }
+
+      if (result.token) {
+        localStorage.setItem("token", result.token)
+      }
+
+      if (result.user?.role) {
+        localStorage.setItem("userRole", result.user.role)
       }
 
       showToast(result.message ?? "Login successful.", "success")

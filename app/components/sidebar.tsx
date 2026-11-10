@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { apiUrl } from "@/lib/api"
+import { apiUrl, getAuthHeaders } from "@/lib/api"
 
 type MenuItem = {
   id: string
@@ -212,12 +212,21 @@ const Sidebar: React.FC = () => {
       setCollapsed(saved === "true")
     }
 
+    const cachedRole = localStorage.getItem("userRole")
+    if (cachedRole) {
+      setUserRole(cachedRole)
+    }
+
     const checkRole = async () => {
       try {
-        const res = await fetch(apiUrl("/auth/me"), { credentials: "include" })
+        const res = await fetch(apiUrl("/auth/me"), {
+          credentials: "include",
+          headers: getAuthHeaders(),
+        })
         const json = await res.json()
         if (json?.user?.role) {
           setUserRole(json.user.role)
+          localStorage.setItem("userRole", json.user.role)
         }
       } catch {
         // fallback

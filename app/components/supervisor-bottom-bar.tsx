@@ -3,21 +3,34 @@
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { apiUrl } from "@/lib/api"
+import { apiUrl, getAuthHeaders } from "@/lib/api"
 
 export default function SupervisorBottomBar() {
   const pathname = usePathname()
   const [role, setRole] = useState<string | null>(null)
 
   useEffect(() => {
-    fetch(apiUrl("/auth/me"), { credentials: "include" })
-      .then((res) => res.json())
-      .then((json) => {
-        if (json?.user?.role) {
-          setRole(json.user.role)
-        }
+    // 1. Instant check from localStorage (never causes re-render lag or flash on page change)
+    const cachedRole = localStorage.getItem("userRole")
+    if (cachedRole) {
+      setRole(cachedRole)
+    }
+
+    // 2. Only fetch if role is not yet known
+    if (!cachedRole) {
+      fetch(apiUrl("/auth/me"), {
+        credentials: "include",
+        headers: getAuthHeaders(),
       })
-      .catch(() => {})
+        .then((res) => res.json())
+        .then((json) => {
+          if (json?.user?.role) {
+            setRole(json.user.role)
+            localStorage.setItem("userRole", json.user.role)
+          }
+        })
+        .catch(() => {})
+    }
   }, [])
 
   // Only render for SUPERVISOR

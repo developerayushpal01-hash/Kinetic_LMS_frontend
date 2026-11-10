@@ -15,15 +15,19 @@ type Entry = { _id: string; labourId: string | { _id: string } | null; attendanc
 type OtDraft = { hours: string }
 type Api<T> = { success: boolean; data?: T; message?: string }
 
-const options: { status: Status; label: string; short: string; active: string; idle: string }[] = [
-  { status: "PRESENT", label: "Present", short: "P", active: "border-emerald-600 bg-emerald-600 text-white", idle: "border-emerald-200 bg-emerald-50 text-emerald-700" },
-  { status: "ABSENT", label: "Absent", short: "A", active: "border-red-600 bg-red-600 text-white", idle: "border-red-200 bg-red-50 text-red-700" },
-  { status: "HALF_DAY", label: "Half Day", short: "HD", active: "border-amber-500 bg-amber-500 text-white", idle: "border-amber-200 bg-amber-50 text-amber-700" },
-  { status: "LEAVE", label: "Leave", short: "L", active: "border-sky-600 bg-sky-600 text-white", idle: "border-sky-200 bg-sky-50 text-sky-700" },
-  { status: "HOLIDAY", label: "Paid Holiday", short: "PH", active: "border-violet-600 bg-violet-600 text-white", idle: "border-violet-200 bg-violet-50 text-violet-700" },
+const options: { status: Status; label: string; short: string; activeClass: string; idleClass: string }[] = [
+  { status: "PRESENT", label: "Present", short: "P", activeClass: "bg-emerald-600 text-white shadow-sm ring-2 ring-emerald-600/30", idleClass: "bg-slate-100 text-slate-700 hover:bg-slate-200" },
+  { status: "HALF_DAY", label: "Half Day", short: "HD", activeClass: "bg-amber-500 text-white shadow-sm ring-2 ring-amber-500/30", idleClass: "bg-slate-100 text-slate-700 hover:bg-slate-200" },
+  { status: "ABSENT", label: "Absent", short: "A", activeClass: "bg-rose-600 text-white shadow-sm ring-2 ring-rose-600/30", idleClass: "bg-slate-100 text-slate-700 hover:bg-slate-200" },
+  { status: "LEAVE", label: "Leave", short: "L", activeClass: "bg-sky-600 text-white shadow-sm ring-2 ring-sky-600/30", idleClass: "bg-slate-100 text-slate-700 hover:bg-slate-200" },
+  { status: "HOLIDAY", label: "Holiday", short: "PH", activeClass: "bg-violet-600 text-white shadow-sm ring-2 ring-violet-600/30", idleClass: "bg-slate-100 text-slate-700 hover:bg-slate-200" },
 ]
-const localDate = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
-const labourIdOf = (entry: Entry) => typeof entry.labourId === "string" ? entry.labourId : entry.labourId?._id || ""
+
+const localDate = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+
+const labourIdOf = (entry: Entry) =>
+  typeof entry.labourId === "string" ? entry.labourId : entry.labourId?._id || ""
 
 export default function MarkAttendancePage() {
   const router = useRouter()
@@ -43,19 +47,21 @@ export default function MarkAttendancePage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const selectedDate = new Date(date + "T00:00:00")
-      const month = selectedDate.getMonth() + 1
-      const year = selectedDate.getFullYear()
+      const selectedDateObj = new Date(date + "T00:00:00")
+      const month = selectedDateObj.getMonth() + 1
+      const year = selectedDateObj.getFullYear()
       const [labourResponse, siteResponse, attendanceResponse] = await Promise.all([
         fetch(apiUrl("/labours/get-labours"), { credentials: "include" }),
         fetch(apiUrl("/sites/get-sites"), { credentials: "include" }),
         fetch(apiUrl(`/attendance/monthly?month=${month}&year=${year}`), { credentials: "include" }),
       ])
-      const labourResult = await labourResponse.json() as Api<Labour[]>
-      const siteResult = await siteResponse.json() as Api<Site[]>
-      const attendanceResult = await attendanceResponse.json() as Api<Entry[]>
+      const labourResult = (await labourResponse.json()) as Api<Labour[]>
+      const siteResult = (await siteResponse.json()) as Api<Site[]>
+      const attendanceResult = (await attendanceResponse.json()) as Api<Entry[]>
+
       if (!labourResponse.ok || !labourResult.success) throw new Error(labourResult.message || "Labours could not be loaded.")
       if (!attendanceResponse.ok || !attendanceResult.success) throw new Error(attendanceResult.message || "Attendance could not be loaded.")
+
       const dayEntries = (attendanceResult.data || []).filter((entry) => entry.attendanceDate.slice(0, 10) === date)
       setLabours((labourResult.data || []).filter((labour) => labour.status === "ACTIVE"))
       setSites((siteResult.data || []).filter((site) => site.status === "ACTIVE"))
@@ -64,11 +70,12 @@ export default function MarkAttendancePage() {
       setSelected(new Set())
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Attendance data could not be loaded.", "error")
-    } finally { setLoading(false) }
+    } finally {
+      setLoading(false)
+    }
   }, [date, showToast])
 
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     load()
   }, [load])
 
@@ -93,10 +100,18 @@ export default function MarkAttendancePage() {
     return result
   }, [draft, entries, visible])
 
-  const toggleAll = () => setSelected((current) => current.size === visible.length ? new Set() : new Set(visible.map((labour) => labour._id)))
+  const toggleAll = () =>
+    setSelected((current) => (current.size === visible.length ? new Set() : new Set(visible.map((l) => l._id))))
+
   const bulkSet = (status: Status) => {
-    const ids = selected.size ? selected : new Set(visible.map((labour) => labour._id))
-    setDraft((current) => { const next = { ...current }; ids.forEach((id) => { next[id] = status }); return next })
+    const ids = selected.size ? selected : new Set(visible.map((l) => l._id))
+    setDraft((current) => {
+      const next = { ...current }
+      ids.forEach((id) => {
+        next[id] = status
+      })
+      return next
+    })
   }
 
   const toggleStatus = (labourId: string, status: Status) => {
@@ -109,97 +124,427 @@ export default function MarkAttendancePage() {
   }
 
   const submit = async () => {
-    if (date > localDate(new Date())) {
-      showToast("Future date attendance cannot be marked.", "error")
-      return
-    }
     const labourById = new Map(labours.map((labour) => [labour._id, labour]))
     const existingByLabour = new Map(entries.map((entry) => [labourIdOf(entry), entry]))
-    const changes = [...new Set([...Object.keys(draft), ...Object.keys(otDraft)])].filter((labourId) => {
-      const existing = existingByLabour.get(labourId)
-      const overtime = otDraft[labourId]
-      return Boolean(draft[labourId]) && (existing?.status !== draft[labourId] || Number(overtime?.hours || 0) !== Number(existing?.overtimeHours || 0))
-    })
-    if (!changes.length) { showToast("No attendance changes to submit.", "info"); return }
-    const missingSite = changes.find((labourId) => draft[labourId] && !labourById.get(labourId)?.site?._id)
-    if (missingSite) { showToast(`${labourById.get(missingSite)?.name || "Labour"} is not assigned to a site.`, "error"); return }
+    const pendingLabourIds = Object.keys(draft)
+
+    if (!pendingLabourIds.length) {
+      showToast("Please mark attendance status for at least one worker before submitting.", "info")
+      return
+    }
 
     setSaving(true)
     try {
-      const results = await Promise.all(changes.map(async (labourId) => {
-        const labour = labourById.get(labourId)!
-        const existing = existingByLabour.get(labourId)
-        const status = draft[labourId]
-        const overtime = otDraft[labourId] || { hours: "" }
+      const results = await Promise.all(
+        pendingLabourIds.map(async (labourId) => {
+          const labour = labourById.get(labourId)!
+          const existing = existingByLabour.get(labourId)
+          const status = draft[labourId]
+          const overtime = otDraft[labourId] || { hours: "" }
 
-        if (!status && existing) {
-          const response = await fetch(apiUrl(`/attendance/delete/${existing._id}`), {
-            method: "DELETE",
-            credentials: "include",
-          })
-          const result = await response.json() as Api<unknown>
-          if (!response.ok || !result.success) throw new Error(result.message || `${labour.name}: attendance removal failed.`)
-          return { labourId, deleted: true as const }
-        }
-
-        const response = await fetch(apiUrl(existing ? `/attendance/update/${existing._id}` : "/attendance/mark"), {
-          method: existing ? "PUT" : "POST", credentials: "include", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(existing ? { status, overtimeHours: Number(overtime.hours || 0), overtimeAmount: null } : { labourId, siteId: labour.site!._id, attendanceDate: date, status, overtimeHours: Number(overtime.hours || 0), overtimeAmount: null, remarks: status === "HOLIDAY" ? "Paid holiday" : "" }),
-        })
-        const result = await response.json() as Api<Entry>
-        if (!response.ok || !result.success || !result.data) throw new Error(result.message || `${labour.name}: attendance save failed.`)
-        return { labourId, deleted: false as const, entry: { ...result.data, labourId } }
-      }))
-
-      setEntries((current) => {
-        let next = [...current]
-        results.forEach((result) => {
-          if (result.deleted) {
-            next = next.filter((entry) => labourIdOf(entry) !== result.labourId)
-            return
+          if (!status && existing) {
+            const response = await fetch(apiUrl(`/attendance/delete/${existing._id}`), {
+              method: "DELETE",
+              credentials: "include",
+            })
+            const result = (await response.json()) as Api<unknown>
+            if (!response.ok || !result.success) throw new Error(result.message || `${labour.name}: attendance removal failed.`)
+            return { labourId, deleted: true as const }
           }
-          const index = next.findIndex((entry) => labourIdOf(entry) === result.labourId)
-          if (index >= 0) next[index] = result.entry
-          else next.push(result.entry)
+
+          const response = await fetch(apiUrl(existing ? `/attendance/update/${existing._id}` : "/attendance/mark"), {
+            method: existing ? "PUT" : "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+              existing
+                ? { status, overtimeHours: Number(overtime.hours || 0), overtimeAmount: null }
+                : {
+                    labourId,
+                    siteId: labour.site?._id,
+                    attendanceDate: date,
+                    status,
+                    overtimeHours: Number(overtime.hours || 0),
+                    overtimeAmount: null,
+                    remarks: status === "HOLIDAY" ? "Paid holiday" : "",
+                  }
+            ),
+          })
+          const result = (await response.json()) as Api<Entry>
+          if (!response.ok || !result.success || !result.data) throw new Error(result.message || `${labour.name}: attendance save failed.`)
+          return { labourId, deleted: false as const, entry: { ...result.data, labourId } }
         })
-        return next
-      })
-      setSelected(new Set())
+      )
+
       setDraft({})
       setOtDraft({})
-      setSiteId("")
-      setQuery("")
-      showToast(`${results.length} attendance changes submitted successfully.`, "success")
+      setSelected(new Set())
+      showToast(`${results.length} worker attendance saved successfully.`, "success")
       router.replace("/pages/contractorpages/attendance")
       router.refresh()
     } catch (error) {
       showToast(error instanceof Error ? error.message : "Attendance submission failed.", "error")
       await load()
-    } finally { setSaving(false) }
+    } finally {
+      setSaving(false)
+    }
   }
 
-  const selectedDate = new Date(date + "T00:00:00")
-  return <div className="flex h-screen overflow-hidden bg-[#f7f8fc]"><Sidebar /><div className="flex min-w-0 flex-1 flex-col overflow-hidden"><Navbar />
-    <main className="min-h-0 flex-1 overflow-y-auto p-5 lg:p-7">
-      <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-xs text-slate-500">Attendance / <span className="font-semibold text-indigo-600">Daily Logs</span></p><h1 className="mt-2 text-2xl font-bold text-slate-950">Daily Attendance Management</h1><p className="mt-1 text-sm text-slate-500">{selectedDate.toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric", weekday: "long" })}</p></div><div className="flex gap-2"><Link href="/pages/contractorpages/attendance" className="flex h-10 items-center rounded-md border border-slate-300 bg-white px-4 text-sm font-semibold text-slate-600">View History</Link><button onClick={submit} disabled={saving || loading} className="h-10 rounded-md bg-indigo-700 px-5 text-sm font-semibold text-white disabled:opacity-50">{saving ? "Submitting..." : "Submit Attendance"}</button></div></header>
+  const selectedDateObj = new Date(date + "T00:00:00")
+  const formattedDate = selectedDateObj.toLocaleDateString("en-IN", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  })
 
-      <section className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
-        {[["Total Labours", visible.length, "text-slate-900"], ["Present", counts.PRESENT, "text-emerald-600"], ["Absent", counts.ABSENT, "text-red-600"], ["Half Day", counts.HALF_DAY, "text-amber-600"], ["Paid Holiday", counts.HOLIDAY, "text-violet-600"], ["Pending", counts.PENDING, "text-orange-600"]].map(([label, value, color]) => <div key={String(label)} className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm"><p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">{label}</p><strong className={`mt-2 block text-2xl ${color}`}>{value}</strong></div>)}
-      </section>
+  return (
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      <Sidebar />
+      <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <Navbar />
 
-      <section className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
-        <div className="grid gap-3 border-b border-slate-200 p-4 md:grid-cols-3 xl:grid-cols-[1fr_180px_180px_auto]">
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search by name, code or mobile..." className="h-10 rounded-md border border-slate-300 px-3 text-sm outline-none focus:border-indigo-500" />
-          <select value={siteId} onChange={(e) => { setSiteId(e.target.value); setSelected(new Set()) }} className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm"><option value="">All Sites</option>{sites.map((site) => <option key={site._id} value={site._id}>{site.siteName}{site.siteCode ? ` (${site.siteCode})` : ""}</option>)}</select>
-          <input type="date" max={localDate(new Date())} value={date} onChange={(e) => setDate(e.target.value)} className="h-10 rounded-md border border-slate-300 px-3 text-sm" />
-          <div className="flex flex-wrap gap-2"><button onClick={() => bulkSet("PRESENT")} className="h-10 rounded-md bg-emerald-600 px-3 text-xs font-bold text-white">Mark All Present</button><button onClick={() => bulkSet("ABSENT")} className="h-10 rounded-md bg-red-50 px-3 text-xs font-bold text-red-600">Mark All Absent</button><button onClick={() => bulkSet("HOLIDAY")} className="h-10 rounded-md bg-violet-50 px-3 text-xs font-bold text-violet-700">Paid Holiday</button></div>
+        {/* Scrollable Main Area */}
+        <main className="min-h-0 flex-1 overflow-y-auto px-3.5 py-4 sm:px-6 sm:py-6 pb-28 md:pb-12">
+          <div className="mx-auto max-w-5xl space-y-4 sm:space-y-6">
+            {/* Header Card (App Style) */}
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-4 sm:p-6 shadow-sm">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <p className="text-xs font-semibold tracking-wide uppercase text-slate-400">
+                      Attendance &bull; Daily Mark
+                    </p>
+                  </div>
+                  <h1 className="mt-1 text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+                    Daily Attendance
+                  </h1>
+                  <p className="mt-0.5 text-xs sm:text-sm font-medium text-slate-500">
+                    {formattedDate}
+                  </p>
+                </div>
+
+                <div className="flex items-center gap-2 pt-2 sm:pt-0">
+                  <Link
+                    href="/pages/contractorpages/attendance"
+                    className="flex-1 sm:flex-initial text-center rounded-xl border border-slate-200 bg-slate-50 px-3.5 py-2 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-100 transition"
+                  >
+                    View History
+                  </Link>
+                  <Link
+                    href="/pages/contractorpages/attendance/scan"
+                    className="flex-1 sm:flex-initial flex items-center justify-center gap-1.5 rounded-xl bg-slate-900 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-slate-800 transition"
+                  >
+                    <span>📷</span>
+                    <span>Scan QR</span>
+                  </Link>
+                </div>
+              </div>
+
+              {/* Date & Site Filter (Mobile Clean Bar) */}
+              <div className="mt-4 pt-4 border-t border-slate-100 grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 border border-slate-200">
+                  <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                  </svg>
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-semibold uppercase text-slate-400">Select Date</label>
+                    <input
+                      type="date"
+                      max={localDate(new Date())}
+                      value={date}
+                      onChange={(e) => setDate(e.target.value)}
+                      className="w-full bg-transparent text-xs sm:text-sm font-semibold text-slate-800 outline-none cursor-pointer"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 rounded-xl bg-slate-50 px-3 py-2 border border-slate-200">
+                  <svg className="h-4 w-4 text-slate-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                  </svg>
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-semibold uppercase text-slate-400">Site Filter</label>
+                    <select
+                      value={siteId}
+                      onChange={(e) => {
+                        setSiteId(e.target.value)
+                        setSelected(new Set())
+                      }}
+                      className="w-full bg-transparent text-xs sm:text-sm font-semibold text-slate-800 outline-none cursor-pointer"
+                    >
+                      <option value="">All Sites ({sites.length})</option>
+                      {sites.map((s) => (
+                        <option key={s._id} value={s._id}>
+                          {s.siteName}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats Metric Cards (Grid of 6 on desktop, 3x2 on mobile) */}
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2 sm:gap-3">
+              {[
+                { label: "Labours", count: visible.length, color: "text-slate-900", bg: "bg-slate-100", dot: "bg-slate-400" },
+                { label: "Present", count: counts.PRESENT, color: "text-emerald-600", bg: "bg-emerald-50", dot: "bg-emerald-500" },
+                { label: "Half Day", count: counts.HALF_DAY, color: "text-amber-600", bg: "bg-amber-50", dot: "bg-amber-500" },
+                { label: "Absent", count: counts.ABSENT, color: "text-rose-600", bg: "bg-rose-50", dot: "bg-rose-500" },
+                { label: "Holiday", count: counts.HOLIDAY, color: "text-violet-600", bg: "bg-violet-50", dot: "bg-violet-500" },
+                { label: "Pending", count: counts.PENDING, color: "text-orange-600", bg: "bg-orange-50", dot: "bg-orange-500" },
+              ].map((stat, i) => (
+                <div
+                  key={i}
+                  className="rounded-xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-sm flex flex-col justify-between"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <span className={`h-1.5 w-1.5 rounded-full ${stat.dot}`} />
+                    <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-slate-400 truncate">
+                      {stat.label}
+                    </p>
+                  </div>
+                  <strong className={`mt-2 text-xl sm:text-2xl font-bold ${stat.color}`}>
+                    {stat.count}
+                  </strong>
+                </div>
+              ))}
+            </div>
+
+            {/* Quick Actions & Search Bar */}
+            <div className="rounded-2xl border border-slate-200/80 bg-white p-3 sm:p-4 shadow-sm space-y-3">
+              {/* Search input */}
+              <div className="relative">
+                <svg
+                  className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  value={query}
+                  onChange={(e) => setQuery(e.target.value)}
+                  placeholder="Search labour name, code or mobile..."
+                  className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-9 pr-4 py-2 text-xs sm:text-sm text-slate-800 placeholder-slate-400 outline-none focus:border-emerald-500 focus:bg-white transition"
+                />
+              </div>
+
+              {/* Quick Bulk Action Buttons */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={toggleAll}
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-slate-900 px-2 py-1"
+                >
+                  <input
+                    type="checkbox"
+                    checked={visible.length > 0 && selected.size === visible.length}
+                    onChange={toggleAll}
+                    className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                  />
+                  <span>Select All ({visible.length})</span>
+                </button>
+
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => bulkSet("PRESENT")}
+                    className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition"
+                  >
+                    All Present
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bulkSet("ABSENT")}
+                    className="rounded-lg bg-rose-50 border border-rose-200 px-2.5 py-1 text-xs font-bold text-rose-700 hover:bg-rose-100 transition"
+                  >
+                    All Absent
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => bulkSet("HOLIDAY")}
+                    className="rounded-lg bg-violet-50 border border-violet-200 px-2.5 py-1 text-xs font-bold text-violet-700 hover:bg-violet-100 transition"
+                  >
+                    Paid Holiday
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Labour Cards List (App style responsive cards) */}
+            <div className="space-y-3">
+              {loading && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500 shadow-sm">
+                  Loading labours and attendance data...
+                </div>
+              )}
+
+              {!loading && !visible.length && (
+                <div className="rounded-2xl border border-slate-200 bg-white p-12 text-center text-sm text-slate-500 shadow-sm">
+                  No pending labours found for this date or filter.
+                </div>
+              )}
+
+              {!loading &&
+                visible.map((labour) => {
+                  const isChecked = selected.has(labour._id)
+                  const currentStatus = draft[labour._id]
+                  const otVal = otDraft[labour._id]?.hours || ""
+
+                  return (
+                    <div
+                      key={labour._id}
+                      className={`rounded-2xl border bg-white p-3.5 sm:p-4 shadow-sm transition-all ${
+                        currentStatus ? "border-emerald-200 bg-emerald-50/20" : "border-slate-200/90"
+                      }`}
+                    >
+                      {/* Top Row: Info + Selection Checkbox */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              setSelected((curr) => {
+                                const next = new Set(curr)
+                                if (next.has(labour._id)) next.delete(labour._id)
+                                else next.add(labour._id)
+                                return next
+                              })
+                            }}
+                            className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                          />
+
+                          <div className="flex h-10 w-10 sm:h-11 sm:w-11 items-center justify-center rounded-xl bg-slate-100 font-bold text-slate-800 text-sm">
+                            {labour.name.charAt(0).toUpperCase()}
+                          </div>
+
+                          <div>
+                            <p className="text-sm font-bold text-slate-900 leading-tight">
+                              {labour.name}
+                            </p>
+                            <p className="text-xs text-slate-500">
+                              {labour.labourCode} &bull; {labour.mobile}
+                            </p>
+                          </div>
+                        </div>
+
+                        {/* Skill Badge */}
+                        <div className="text-right">
+                          <span className="inline-block rounded-md bg-indigo-50 border border-indigo-100 px-2 py-0.5 text-[10px] font-bold text-indigo-700">
+                            {labour.skillId?.skillName || "Unskilled"}
+                          </span>
+                          <p className="mt-0.5 text-[11px] text-slate-400 truncate max-w-[120px]">
+                            {labour.site?.siteName || "No Site"}
+                          </p>
+                        </div>
+                      </div>
+
+                      {/* Middle Row: Status Action Buttons (Pill Bar) */}
+                      <div className="mt-3 pt-3 border-t border-slate-100 grid grid-cols-5 gap-1.5">
+                        {options.map((opt) => {
+                          const isActive = currentStatus === opt.status
+                          return (
+                            <button
+                              key={opt.status}
+                              type="button"
+                              onClick={() => toggleStatus(labour._id, opt.status)}
+                              className={`py-2 px-1 rounded-xl text-xs font-bold transition-all text-center flex flex-col sm:flex-row items-center justify-center gap-0.5 sm:gap-1.5 ${
+                                isActive ? opt.activeClass : opt.idleClass
+                              }`}
+                            >
+                              <span className="text-[10px] sm:text-xs font-black">{opt.short}</span>
+                              <span className="hidden sm:inline text-xs">{opt.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+
+                      {/* Bottom Row: OT Quick Presets / Input */}
+                      <div className="mt-2.5 flex items-center justify-between gap-2 rounded-xl bg-slate-50 px-3 py-1.5 border border-slate-100">
+                        <span className="text-[11px] font-semibold text-slate-500">Overtime (OT):</span>
+                        <div className="flex items-center gap-1.5">
+                          {["0", "0.5", "1", "1.5", "2"].map((val) => {
+                            const isOtActive = otVal === val || (val === "0" && !otVal)
+                            return (
+                              <button
+                                key={val}
+                                type="button"
+                                onClick={() => {
+                                  setOtDraft((curr) => ({
+                                    ...curr,
+                                    [labour._id]: { hours: val === "0" ? "" : val },
+                                  }))
+                                  if (!draft[labour._id]) {
+                                    setDraft((curr) => ({ ...curr, [labour._id]: "PRESENT" }))
+                                  }
+                                }}
+                                className={`rounded-lg px-2 py-0.5 text-[11px] font-bold transition ${
+                                  isOtActive
+                                    ? "bg-slate-900 text-white"
+                                    : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-100"
+                                }`}
+                              >
+                                {val === "0" ? "0h" : `${val}h`}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+            </div>
+          </div>
+        </main>
+
+        {/* Floating Bottom Sticky Bar (App Style Submission Bar) */}
+        <div className="fixed bottom-0 sm:bottom-0 left-0 right-0 z-40 border-t border-slate-200 bg-white/95 backdrop-blur-md p-3 sm:px-6 shadow-[0_-4px_20px_rgba(0,0,0,0.08)]">
+          <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600 font-bold text-sm">
+                {Object.keys(draft).length}
+              </div>
+              <div>
+                <p className="text-xs font-bold text-slate-900 leading-tight">
+                  {Object.keys(draft).length} of {visible.length} Labours Marked
+                </p>
+                <p className="text-[11px] text-slate-400">
+                  {date === localDate(new Date()) ? "For Today" : `For ${date}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={submit}
+                disabled={saving || loading || Object.keys(draft).length === 0}
+                className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-2.5 text-xs sm:text-sm font-bold text-white shadow-md hover:bg-indigo-700 active:scale-95 transition disabled:opacity-40"
+              >
+                {saving ? (
+                  <>
+                    <svg className="animate-spin h-4 w-4 text-white" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z" />
+                    </svg>
+                    Saving...
+                  </>
+                ) : (
+                  <>
+                    <span>Submit Attendance</span>
+                    <span className="text-xs font-normal opacity-80">({Object.keys(draft).length})</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
         </div>
-
-        <div className="overflow-x-auto"><table className="w-full min-w-[900px] text-left"><thead className="bg-slate-50 text-[9px] uppercase tracking-wider text-slate-500"><tr><th className="w-12 px-4 py-3"><input type="checkbox" checked={visible.length > 0 && selected.size === visible.length} onChange={toggleAll} /></th><th className="px-4 py-3">Labour Information</th><th className="px-4 py-3">Site &amp; Role</th><th className="px-4 py-3">Attendance Status</th><th className="min-w-32 px-4 py-3 text-center">OT Hours</th></tr></thead><tbody className="divide-y divide-slate-100">{visible.map((labour) => <tr key={labour._id} className="hover:bg-slate-50"><td className="px-4 py-4"><input type="checkbox" checked={selected.has(labour._id)} onChange={() => setSelected((current) => { const next = new Set(current); if (next.has(labour._id)) next.delete(labour._id); else next.add(labour._id); return next })} /></td><td className="px-4 py-4"><strong className="block text-xs text-slate-900">{labour.name}</strong><span className="text-[9px] text-slate-400">{labour.labourCode} - {labour.mobile}</span></td><td className="px-4 py-4"><strong className="block text-xs text-slate-700">{labour.site?.siteName || "Not assigned"}</strong><span className="text-[9px] font-medium text-indigo-600">{labour.skillId?.skillName || "No skill"}</span></td><td className="px-4 py-4"><div className="flex flex-wrap gap-2">{options.map((option) => <button key={option.status} onClick={() => toggleStatus(labour._id, option.status)} className={`min-w-20 rounded-md border px-3 py-2 text-[9px] font-bold transition ${draft[labour._id] === option.status ? option.active : option.idle}`}><span className="mr-1">{option.short}</span>{option.label}</button>)}</div></td><td className="px-4 py-4 text-center"><input aria-label={`${labour.name} OT hours`} type="number" min="0" step="0.5" value={otDraft[labour._id]?.hours || ""} onChange={(event) => { setOtDraft((current) => ({ ...current, [labour._id]: { hours: event.target.value } })); setDraft((current) => current[labour._id] ? current : { ...current, [labour._id]: "PRESENT" }) }} placeholder="0" className="h-9 w-24 rounded-md border border-cyan-200 px-2 text-center text-xs text-cyan-700 outline-none focus:border-cyan-500" /></td></tr>)}</tbody></table></div>
-        {loading && <div className="p-12 text-center text-sm text-slate-500">Loading site labours and attendance...</div>}
-        {!loading && !visible.length && <div className="p-12 text-center text-sm text-slate-500">No pending labours found. Attendance is already marked for this date or no active labour matches the filters.</div>}
-        <div className="border-t border-slate-200 bg-slate-50 px-4 py-3 text-[10px] text-slate-500">Showing {visible.length} pending labours. Workers disappear after attendance is submitted and return automatically on the next date.</div>
-      </section>
-    </main>
-  </div></div>
+      </div>
+    </div>
+  )
 }

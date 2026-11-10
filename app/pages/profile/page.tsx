@@ -4,7 +4,7 @@ import { ChangeEvent, FormEvent, useCallback, useEffect, useState } from "react"
 import Navbar from "@/app/components/navbar"
 import Sidebar from "@/app/components/sidebar"
 import { useToast } from "@/app/components/toast-provider"
-import { apiUrl } from "@/lib/api"
+import { apiUrl, getAuthHeaders } from "@/lib/api"
 
 type Address = { street: string; city: string; state: string; pincode: string; country: string }
 type Company = {
@@ -46,9 +46,32 @@ const emptyCompany: Company = {
 
 export default function ProfilePage() {
   const { showToast } = useToast()
-  const [company, setCompany] = useState<Company>(emptyCompany)
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [company, setCompany] = useState<Company>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("cachedCompany")
+        if (cached) return JSON.parse(cached)
+      } catch {}
+    }
+    return emptyCompany
+  })
+
+  const [user, setUser] = useState<User | null>(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const cached = localStorage.getItem("cachedUser")
+        if (cached) return JSON.parse(cached)
+      } catch {}
+    }
+    return null
+  })
+
+  const [loading, setLoading] = useState(() => {
+    if (typeof window !== "undefined") {
+      return !localStorage.getItem("cachedUser")
+    }
+    return true
+  })
   const [saving, setSaving] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
 
@@ -59,33 +82,49 @@ export default function ProfilePage() {
   const [isChangingPassword, setIsChangingPassword] = useState(false)
 
   const load = useCallback(async () => {
-    setLoading(true)
     try {
-      const userResponse = await fetch(apiUrl("/auth/me"), { credentials: "include" })
+      const authHeaders = getAuthHeaders()
+      const userResponse = await fetch(apiUrl("/auth/me"), {
+        credentials: "include",
+        headers: authHeaders,
+      })
       const userResult = (await userResponse.json()) as Api<Company>
 
       if (userResult.success && userResult.user) {
         setUser(userResult.user)
+        try {
+          localStorage.setItem("cachedUser", JSON.stringify(userResult.user))
+          if (userResult.user.role) localStorage.setItem("userRole", userResult.user.role)
+        } catch {}
 
         // Only fetch company profile if contractor
         if (userResult.user.role === "CONTRACTOR") {
-          const companyResponse = await fetch(apiUrl("/company/profile"), { credentials: "include" })
+          const companyResponse = await fetch(apiUrl("/company/profile"), {
+            credentials: "include",
+            headers: authHeaders,
+          })
           const companyResult = (await companyResponse.json()) as Api<Company>
           if (companyResponse.ok && companyResult.success && companyResult.company) {
-            setCompany({
+            const resolvedCompany = {
               ...emptyCompany,
               ...companyResult.company,
               address: { ...emptyCompany.address, ...companyResult.company.address },
-            })
+            }
+            setCompany(resolvedCompany)
+            try {
+              localStorage.setItem("cachedCompany", JSON.stringify(resolvedCompany))
+            } catch {}
           }
         }
       }
     } catch (error) {
-      showToast(error instanceof Error ? error.message : "Profile could not be loaded.", "error")
+      if (!user) {
+        showToast(error instanceof Error ? error.message : "Profile could not be loaded.", "error")
+      }
     } finally {
       setLoading(false)
     }
-  }, [showToast])
+  }, [showToast, user])
 
   useEffect(() => {
     load()
@@ -129,7 +168,7 @@ export default function ProfilePage() {
       const response = await fetch(apiUrl("/company/profile"), {
         method: "PUT",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify(company),
       })
       const result = (await response.json()) as Api<Company>
@@ -166,7 +205,7 @@ export default function ProfilePage() {
       const res = await fetch(apiUrl("/auth/change-password"), {
         method: "POST",
         credentials: "include",
-        headers: { "Content-Type": "application/json" },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ oldPassword: currentPassword, newPassword }),
       })
       const data = await res.json()
@@ -187,7 +226,23 @@ export default function ProfilePage() {
   const input =
     "mt-1 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
 
+  const isSupervisor = user?.role === "SUPERVISOR"
+
   if (loading) {
+    if (isSupervisor) {
+      return (
+        <div className="flex min-h-screen flex-col bg-[#f7f8fc] pb-24">
+          <Navbar />
+          <main className="mx-auto flex w-full max-w-2xl flex-1 items-center justify-center p-7 text-sm text-slate-500">
+            <div className="flex flex-col items-center gap-3">
+              <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-emerald-600" />
+              <span className="text-xs font-medium text-slate-500">Loading supervisor profile...</span>
+            </div>
+          </main>
+        </div>
+      )
+    }
+
     return (
       <div className="flex h-screen overflow-hidden bg-[#f7f8fc]">
         <Sidebar />
@@ -198,8 +253,6 @@ export default function ProfilePage() {
       </div>
     )
   }
-
-  const isSupervisor = user?.role === "SUPERVISOR"
 
   // 1. SUPERVISOR PERSONAL PROFILE VIEW
   if (isSupervisor) {
