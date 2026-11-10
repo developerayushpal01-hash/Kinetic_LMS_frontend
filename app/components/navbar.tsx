@@ -42,6 +42,7 @@ const Navbar = () => {
   const [sites, setSites] = useState<SiteItem[]>([])
   const [selectedSite, setSelectedSite] = useState<string>("All Sites")
   const [isSiteMenuOpen, setIsSiteMenuOpen] = useState(false)
+  const [unreadCount, setUnreadCount] = useState<number>(0)
   const siteMenuRef = useRef<HTMLDivElement>(null)
 
   const payrollOptions = [
@@ -139,6 +140,34 @@ const Navbar = () => {
 
     return () => controller.abort()
   }, [])
+
+  // Load unread notifications count
+  useEffect(() => {
+    let active = true
+
+    const loadUnreadCount = async () => {
+      try {
+        const response = await fetch(apiUrl("/notifications"), {
+          credentials: "include",
+          headers: getAuthHeaders(),
+        })
+        const result = await response.json()
+        if (active && response.ok && result.success) {
+          setUnreadCount(typeof result.unreadCount === "number" ? result.unreadCount : 0)
+        }
+      } catch {}
+    }
+
+    loadUnreadCount()
+
+    // Refresh every 30s
+    const interval = setInterval(loadUnreadCount, 30000)
+
+    return () => {
+      active = false
+      clearInterval(interval)
+    }
+  }, [pathname])
 
   const handleLogout = async () => {
     setIsLoggingOut(true)
@@ -241,9 +270,11 @@ const Navbar = () => {
               <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
               <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
             </svg>
-            <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
-              3
-            </span>
+            {unreadCount > 0 && (
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
           </Link>
 
           {/* Profile Avatar without dropdown arrow */}
@@ -439,7 +470,7 @@ const Navbar = () => {
           )}
         </div>
 
-        {/* Notifications Icon with count 3 */}
+        {/* Notifications Icon with dynamic count */}
         <Link
           href="/pages/notifications"
           aria-label="Notifications"
@@ -449,9 +480,11 @@ const Navbar = () => {
             <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
             <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
           </svg>
-          <span className="absolute 1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
-            3
-          </span>
+          {unreadCount > 0 && (
+            <span className="absolute 1.5 top-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-emerald-500 text-[10px] font-bold text-white shadow-xs">
+              {unreadCount > 9 ? "9+" : unreadCount}
+            </span>
+          )}
         </Link>
 
         {/* Settings Icon */}
