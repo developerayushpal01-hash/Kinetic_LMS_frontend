@@ -61,9 +61,20 @@ export const authFetch = async (endpointOrUrl: string, init?: RequestInit): Prom
 }
 
 // Auto-patch window.fetch in the browser so ALL existing page fetch calls automatically include auth tokens!
+// IMPORTANT: Only intercept requests made to our own LMS API, NOT external third-party APIs (like Firebase, Google APIs)
 if (typeof window !== "undefined" && !(window as any).__LMS_FETCH_PATCHED__) {
   const originalFetch = window.fetch.bind(window)
   window.fetch = async (input: RequestInfo | URL, init?: RequestInit) => {
+    const urlString = typeof input === "string" ? input : input instanceof URL ? input.toString() : (input as Request).url || ""
+
+    // If request is to an external third-party domain (e.g. firebaseinstallations.googleapis.com, googleapis.com), pass through untouched!
+    const isExternal = urlString.startsWith("http://") || urlString.startsWith("https://")
+    const isLmsApi = urlString.includes("/api") || (API_BASE_URL && urlString.startsWith(API_BASE_URL))
+
+    if (isExternal && !isLmsApi) {
+      return originalFetch(input, init)
+    }
+
     const token = localStorage.getItem("token")
     const customInit: RequestInit = {
       credentials: "include",

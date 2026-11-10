@@ -35,9 +35,23 @@ export const PushNotificationManager = () => {
 
     // Handle foreground notifications received while user is on the app
     onMessageListener((payload) => {
-      const title = payload?.notification?.title || payload?.data?.title || "New Notification"
+      const title = payload?.notification?.title || payload?.data?.title || "Kinetic LMS Alert"
       const body = payload?.notification?.body || payload?.data?.body || ""
+      
+      // 1. Show in-app Toast
       showToast(`${title}: ${body}`, "info")
+
+      // 2. Also trigger native browser Desktop/System push notification if supported
+      if (typeof window !== "undefined" && "Notification" in window && Notification.permission === "granted") {
+        try {
+          new Notification(title, {
+            body,
+            icon: "/assets/notification.png",
+          })
+        } catch (e) {
+          console.warn("Direct Notification constructor failed, service worker will handle:", e)
+        }
+      }
     })
   }, [showToast])
 
